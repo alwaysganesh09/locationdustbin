@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Dustbin Finder</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-recycle"></i>
+                    <h1>EcoFinder</h1>
+                </div>
+                <div class="header-actions">
+                    <button class="btn-secondary" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i>
+                        Refresh
+                    </button>
+                    <button class="btn-primary" id="locateBtn">
+                        <i class="fas fa-location-arrow"></i>
+                        Find Me
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="search-section">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" placeholder="Search for dustbins...">
+                    </div>
+                </div>
+
+                <div class="filters-section">
+                    <h3>Filter by Fill Level</h3>
+                    <div class="filter-options">
+                        <label class="filter-option">
+                            <input type="checkbox" id="filterEmpty" checked>
+                            <span class="checkmark empty"></span>
+                            Empty (0-25%)
+                        </label>
+                        <label class="filter-option">
+                            <input type="checkbox" id="filterLow" checked>
+                            <span class="checkmark low"></span>
+                            Low (26-50%)
+                        </label>
+                        <label class="filter-option">
+                            <input type="checkbox" id="filterMedium" checked>
+                            <span class="checkmark medium"></span>
+                            Medium (51-75%)
+                        </label>
+                        <label class="filter-option">
+                            <input type="checkbox" id="filterHigh" checked>
+                            <span class="checkmark high"></span>
+                            High (76-100%)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="dustbin-list" id="dustbinList">
+                    <h3>Nearby Dustbins</h3>
+                    <div class="loading" id="loadingList">
+                        <div class="spinner"></div>
+                        <p>Loading dustbins...</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Map Container -->
+            <div class="map-container">
+                <div id="map" class="map"></div>
+                <div class="loading map-loading" id="mapLoading">
+                    <div class="spinner"></div>
+                    <p>Loading map...</p>
+                </div>
+                
+                <!-- Location Status -->
+                <div class="location-status" id="locationStatus">
+                    <i class="fas fa-location-dot"></i>
+                    <span>Getting your location...</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Dustbin Details Modal -->
+        <div class="modal-overlay" id="modalOverlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Dustbin Details</h2>
+                    <button class="modal-close" id="modalClose">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-content" id="modalContent">
+                    <!-- Content will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notifications -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="script.js"></script>
+    <!-- Use Vercel's public environment variable for the API key -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=${process.env.GOOGLE_MAPS_API_KEY}&callback=initMap"></script>
+</body>
+</html>
