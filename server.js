@@ -2,6 +2,7 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const path = require('path');
 const cors = require('cors');
+const fs = require('fs'); // ADD THIS LINE: Require the file system module
 require('dotenv').config();
 
 const app = express();
@@ -10,6 +11,7 @@ const PORT = process.env.PORT || 3000; // Vercel ignores this PORT
 // Middleware
 app.use(cors());
 app.use(express.json());
+// Assuming you're using a 'public' folder for static assets
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection
@@ -18,7 +20,6 @@ const MONGODB_URI = process.env.MONGODB_URI;
 
 if (!MONGODB_URI) {
     console.error('MONGODB_URI environment variable is not set. ❗');
-    // On Vercel, this will cause a deployment failure, which is the desired behavior.
     process.exit(1); 
 }
 
@@ -30,13 +31,10 @@ MongoClient.connect(MONGODB_URI, {
 .then(client => {
     console.log('Connected to MongoDB');
     db = client.db('smartdustbin');
-    
-    // Initialize sample data if the collection is empty
     initializeSampleData();
 })
 .catch(error => {
     console.error('MongoDB connection error:', error);
-    // Gracefully handle errors without exiting
 });
 
 // Initialize sample data
@@ -44,10 +42,8 @@ async function initializeSampleData() {
     try {
         const collection = db.collection('dustbins');
         const count = await collection.countDocuments();
-        
         if (count === 0) {
             console.log('Initializing sample dustbin data...');
-            
             const sampleDustbins = [
                 { id: 'dustbin_001', name: 'Central Park Entrance', address: '1 Central Park West, New York, NY 10023', latitude: 40.7829, longitude: -73.9654, fillPercentage: 25, type: 'General Waste', capacity: 'Large', lastUpdated: new Date(), status: 'active' },
                 { id: 'dustbin_002', name: 'Times Square North', address: '1560 Broadway, New York, NY 10036', latitude: 40.7580, longitude: -73.9855, fillPercentage: 78, type: 'Mixed Waste', capacity: 'Standard', lastUpdated: new Date(), status: 'active' },
@@ -62,7 +58,6 @@ async function initializeSampleData() {
                 { id: 'dustbin_011', name: 'Statue of Liberty Ferry', address: 'Battery Park, New York, NY 10004', latitude: 40.7033, longitude: -74.0170, fillPercentage: 28, type: 'General Waste', capacity: 'Standard', lastUpdated: new Date(), status: 'active' },
                 { id: 'dustbin_012', name: 'One World Trade Center', address: '285 Fulton St, New York, NY 10007', latitude: 40.7127, longitude: -74.0134, fillPercentage: 73, type: 'General Waste', capacity: 'Large', lastUpdated: new Date(), status: 'active' }
             ];
-            
             await collection.insertMany(sampleDustbins);
             console.log('Sample data inserted successfully');
         }
@@ -72,14 +67,27 @@ async function initializeSampleData() {
 }
 
 // Routes
-// Serve the main HTML file
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const filePath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+            console.error(err);
+            return res.status(500).json({ error: 'Failed to load page' });
+        }
+        
+        // ADD THIS LINE: Replace the placeholder with the environment variable
+        const modifiedHtml = data.replace('GOOGLE_MAPS_API_KEY', process.env.GOOGLE_MAPS_API_KEY);
+        
+        res.send(modifiedHtml);
+    });
 });
 
 // Get all dustbins
 app.get('/api/dustbins', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const collection = db.collection('dustbins');
         const dustbins = await collection.find({ status: 'active' }).toArray();
         res.json(dustbins);
@@ -92,13 +100,14 @@ app.get('/api/dustbins', async (req, res) => {
 // Get dustbin by ID
 app.get('/api/dustbins/:id', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const collection = db.collection('dustbins');
         const dustbin = await collection.findOne({ id: req.params.id });
-        
         if (!dustbin) {
             return res.status(404).json({ error: 'Dustbin not found' });
         }
-        
         res.json(dustbin);
     } catch (error) {
         console.error('Error fetching dustbin:', error);
@@ -109,15 +118,15 @@ app.get('/api/dustbins/:id', async (req, res) => {
 // Get dustbins within a radius
 app.get('/api/dustbins/nearby/:lat/:lng/:radius', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const { lat, lng, radius } = req.params;
         const latitude = parseFloat(lat);
         const longitude = parseFloat(lng);
         const radiusKm = parseFloat(radius);
-        
         const collection = db.collection('dustbins');
         const dustbins = await collection.find({ status: 'active' }).toArray();
-        
-        // Filter dustbins within radius
         const nearbyDustbins = dustbins.filter(dustbin => {
             const distance = calculateDistance(
                 latitude, longitude,
@@ -125,14 +134,11 @@ app.get('/api/dustbins/nearby/:lat/:lng/:radius', async (req, res) => {
             );
             return distance <= radiusKm;
         });
-        
-        // Sort by distance
         nearbyDustbins.sort((a, b) => {
             const distanceA = calculateDistance(latitude, longitude, a.latitude, a.longitude);
             const distanceB = calculateDistance(latitude, longitude, b.latitude, b.longitude);
             return distanceA - distanceB;
         });
-        
         res.json(nearbyDustbins);
     } catch (error) {
         console.error('Error fetching nearby dustbins:', error);
@@ -143,27 +149,21 @@ app.get('/api/dustbins/nearby/:lat/:lng/:radius', async (req, res) => {
 // Update dustbin fill level
 app.put('/api/dustbins/:id/fill-level', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const { fillPercentage } = req.body;
-        
         if (fillPercentage < 0 || fillPercentage > 100) {
             return res.status(400).json({ error: 'Fill percentage must be between 0 and 100' });
         }
-        
         const collection = db.collection('dustbins');
         const result = await collection.updateOne(
             { id: req.params.id },
-            { 
-                $set: { 
-                    fillPercentage: fillPercentage,
-                    lastUpdated: new Date()
-                }
-            }
+            { $set: { fillPercentage: fillPercentage, lastUpdated: new Date() } }
         );
-        
         if (result.matchedCount === 0) {
             return res.status(404).json({ error: 'Dustbin not found' });
         }
-        
         res.json({ message: 'Fill level updated successfully' });
     } catch (error) {
         console.error('Error updating fill level:', error);
@@ -174,8 +174,10 @@ app.put('/api/dustbins/:id/fill-level', async (req, res) => {
 // Report an issue with a dustbin
 app.post('/api/dustbins/:id/report', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const { issue, description } = req.body;
-        
         const report = {
             dustbinId: req.params.id,
             issue: issue,
@@ -183,10 +185,8 @@ app.post('/api/dustbins/:id/report', async (req, res) => {
             reportedAt: new Date(),
             status: 'open'
         };
-        
         const collection = db.collection('reports');
         await collection.insertOne(report);
-        
         res.json({ message: 'Issue reported successfully' });
     } catch (error) {
         console.error('Error reporting issue:', error);
@@ -197,13 +197,13 @@ app.post('/api/dustbins/:id/report', async (req, res) => {
 // Add a new dustbin (admin endpoint)
 app.post('/api/dustbins', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const { name, address, latitude, longitude, type, capacity } = req.body;
-        
-        // Validate required fields
         if (!name || !address || !latitude || !longitude) {
             return res.status(400).json({ error: 'Missing required fields' });
         }
-        
         const dustbin = {
             id: `dustbin_${Date.now()}`,
             name,
@@ -216,10 +216,8 @@ app.post('/api/dustbins', async (req, res) => {
             lastUpdated: new Date(),
             status: 'active'
         };
-        
         const collection = db.collection('dustbins');
         await collection.insertOne(dustbin);
-        
         res.status(201).json(dustbin);
     } catch (error) {
         console.error('Error adding dustbin:', error);
@@ -230,9 +228,11 @@ app.post('/api/dustbins', async (req, res) => {
 // Get statistics
 app.get('/api/stats', async (req, res) => {
     try {
+        if (!db) {
+            return res.status(503).json({ error: 'Database not connected' });
+        }
         const collection = db.collection('dustbins');
         const dustbins = await collection.find({ status: 'active' }).toArray();
-        
         const stats = {
             total: dustbins.length,
             empty: dustbins.filter(d => d.fillPercentage <= 25).length,
@@ -241,7 +241,6 @@ app.get('/api/stats', async (req, res) => {
             high: dustbins.filter(d => d.fillPercentage > 75).length,
             averageFillLevel: dustbins.length > 0 ? dustbins.reduce((sum, d) => sum + d.fillPercentage, 0) / dustbins.length : 0
         };
-        
         res.json(stats);
     } catch (error) {
         console.error('Error fetching stats:', error);
@@ -249,23 +248,14 @@ app.get('/api/stats', async (req, res) => {
     }
 });
 
-// Utility function to calculate distance between two points
+// Utility function to calculate distance
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the Earth in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
-}
-
-// Simulate real-time updates (optional - for demonstration)
-// Not suitable for Vercel's serverless environment.
-function simulateRealTimeUpdates() {
-    // This function will not work as expected on Vercel as functions are short-lived.
-    // It's best to remove or comment this out for Vercel deployment.
 }
 
 // Error handling middleware
@@ -279,5 +269,5 @@ app.use((req, res) => {
     res.status(404).json({ error: 'Endpoint not found' });
 });
 
-// Final step: EXPORT THE EXPRESS APP
+// EXPORT THE EXPRESS APP
 module.exports = app;
