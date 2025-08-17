@@ -2,25 +2,28 @@ const express = require('express');
 const { MongoClient } = require('mongodb');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs'); // ADD THIS LINE: Require the file system module
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Vercel ignores this PORT
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-// Assuming you're using a 'public' folder for static assets
+// Serve static files from the 'public' folder
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB connection
 let db;
 const MONGODB_URI = process.env.MONGODB_URI;
 
+// Check for MongoDB URI
 if (!MONGODB_URI) {
     console.error('MONGODB_URI environment variable is not set. ❗');
-    process.exit(1); 
+    // On Vercel, it's better to log the error and not exit
+    // so the function can still serve the front-end.
+    // However, API routes will fail.
 }
 
 // Connect to MongoDB
@@ -31,6 +34,7 @@ MongoClient.connect(MONGODB_URI, {
 .then(client => {
     console.log('Connected to MongoDB');
     db = client.db('smartdustbin');
+    // Initialize sample data on first run
     initializeSampleData();
 })
 .catch(error => {
@@ -40,6 +44,7 @@ MongoClient.connect(MONGODB_URI, {
 // Initialize sample data
 async function initializeSampleData() {
     try {
+        if (!db) return;
         const collection = db.collection('dustbins');
         const count = await collection.countDocuments();
         if (count === 0) {
@@ -67,6 +72,7 @@ async function initializeSampleData() {
 }
 
 // Routes
+// This route now injects the API key before serving the HTML
 app.get('/', (req, res) => {
     const filePath = path.join(__dirname, 'public', 'index.html');
     fs.readFile(filePath, 'utf8', (err, data) => {
@@ -75,7 +81,6 @@ app.get('/', (req, res) => {
             return res.status(500).json({ error: 'Failed to load page' });
         }
         
-        // ADD THIS LINE: Replace the placeholder with the environment variable
         const modifiedHtml = data.replace('GOOGLE_MAPS_API_KEY', process.env.GOOGLE_MAPS_API_KEY);
         
         res.send(modifiedHtml);
